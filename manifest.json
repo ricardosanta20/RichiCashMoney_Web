@@ -1,0 +1,16 @@
+{
+  "_version": "V1.0",
+  "name": "RichiCashMoney",
+  "short_name": "RichiCash",
+  "start_url": "./index.html",
+  "display": "standalone",
+  "background_color": "#f4f7f6",
+  "theme_color": "#1abc9c",
+  "icons": [
+    {
+      "src": "https://cdn-icons-png.flaticon.com/512/3135/3135715.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ]
+}

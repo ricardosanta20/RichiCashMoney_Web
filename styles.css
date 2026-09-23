@@ -1,0 +1,113 @@
+/* V1.2 */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+    font-family: 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+    background-color: #f4f7f6;
+    color: #333;
+    padding: 20px;
+}
+
+.container {
+    max-width: 600px;
+    margin: 0 auto;
+}
+
+header {
+    text-align: center;
+    margin-bottom: 30px;
+}
+
+h1 {
+    color: #2c3e50;
+    margin-bottom: 15px;
+    font-size: 1.5rem;
+}
+
+.total-box {
+    background: linear-gradient(135deg, #1abc9c, #16a085);
+    color: white;
+    padding: 25px 20px;
+    border-radius: 16px;
+    box-shadow: 0 10px 20px rgba(26, 188, 156, 0.2);
+}
+
+.total-box p {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    margin-bottom: 5px;
+    opacity: 0.9;
+}
+
+.total-box h2 {
+    font-size: 2.8rem;
+    font-weight: bold;
+}
+
+h3 {
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.cards-grid {
+    display: grid;
+    /* Esto hace que las tarjetas se adapten solas al ancho de la pantalla */
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 15px;
+}
+
+.card {
+    background: white;
+    padding: 20px 15px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    text-align: center;
+    transition: transform 0.2s;
+}
+
+.card:hover {
+    transform: translateY(-3px);
+}
+
+.card-title {
+    font-size: 0.85rem;
+    color: #7f8c8d;
+    margin-bottom: 8px;
+    font-weight: 600;
+}
+
+.card-monto {
+    font-size: 1.25rem;
+    font-weight: bold;
+    color: #2c3e50;
+}
+
+/* Formato para deudas o saldos en contra */
+.negativo {
+    color: #e74c3c;
+}
+
+/* V1.3 - Estilos adicionales para gráficos */
+.seccion-titulo {
+    margin-top: 35px;
+    margin-bottom: 15px;
+    color: #2c3e50;
+    font-size: 1.1rem;
+}
+
+.chart-container {
+    background: white;
+    padding: 20px;
+    border-radius: 12px;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.04);
+    margin-bottom: 40px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}

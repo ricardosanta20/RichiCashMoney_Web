@@ -1,0 +1,43 @@
+<!-- V1.4 -->
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RichiCashMoney - Dashboard</title>
+    
+    <!-- Enlace al Manifest para la PWA -->
+    <link rel="manifest" href="manifest.json">
+    <!-- Color del tema para la barra del navegador en móviles -->
+    <meta name="theme-color" content="#1abc9c">
+    
+    <link rel="stylesheet" href="styles.css">
+    
+    <!-- Librerías externas -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>RichiCash PRO</h1>
+            <div class="total-box">
+                <p>Saldo Total Disponible</p>
+                <h2 id="saldo-total">S/ 0.00</h2>
+            </div>
+        </header>
+        
+        <h3>Mis Cuentas</h3>
+        <div id="grid-cuentas" class="cards-grid">
+            <p>Cargando saldos...</p>
+        </div>
+
+        <h3 class="seccion-titulo">Gastos por Categoría</h3>
+        <div class="chart-container">
+            <canvas id="graficoGastos"></canvas>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
