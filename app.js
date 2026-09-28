@@ -4,16 +4,16 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='
 */
 
-// V8.1
+// V8.2
 // ==========================================
 // CONFIGURACIÓN DE CREDENCIALES
 // ==========================================
-const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co';
+const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
-const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='; // La misma que usas en el bot de Python
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='
 
-// Inicializar Supabase y Fernet
-const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// Corrección: Cambio de nombre a 'clienteSupabase' para evitar colisiones en memoria
+const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const secret = new fernet.Secret(FERNET_KEY);
 
 // Variables globales de estado
@@ -50,14 +50,13 @@ async function inicializarDashboard() {
 function configurarFiltroMes() {
     const inputMes = document.getElementById('filtro-mes');
     const hoy = new Date();
-    // Formato YYYY-MM
     const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
     inputMes.value = mesActual;
     inputMes.addEventListener('change', () => recargarDatosYGraficos());
 }
 
 async function cargarCuentas() {
-    const { data, error } = await supabase.from('cuentas').select('*').order('id', { ascending: true });
+    const { data, error } = await clienteSupabase.from('cuentas').select('*').order('id', { ascending: true });
     if (error) {
         console.error("Error cargando cuentas:", error);
         return;
@@ -74,12 +73,10 @@ function renderizarCuentas() {
     todasLasCuentas.forEach(cuenta => {
         const saldo = parseFloat(cuenta.saldo);
         
-        // Sumar solo a la liquidez real si cumple la regla
         if (['BCP Débito', 'Efectivo', 'Tarjeta de alimentos'].includes(cuenta.nombre)) {
             liquidezReal += saldo;
         }
 
-        // Crear la tarjeta interactiva
         const card = document.createElement('div');
         card.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-teal-300 transition text-center";
         card.onclick = () => abrirHistorial(cuenta.id, cuenta.nombre);
@@ -97,14 +94,13 @@ function renderizarCuentas() {
 }
 
 async function recargarDatosYGraficos() {
-    const mesSeleccionado = document.getElementById('filtro-mes').value; // 'YYYY-MM'
+    const mesSeleccionado = document.getElementById('filtro-mes').value; 
     
-    // Calcular primer y último día del mes
     const [año, mes] = mesSeleccionado.split('-');
     const fechaInicio = new Date(año, mes - 1, 1).toISOString();
     const fechaFin = new Date(año, mes, 0, 23, 59, 59).toISOString();
 
-    const { data, error } = await supabase
+    const { data, error } = await clienteSupabase
         .from('transacciones')
         .select(`*, conceptos(nombre)`)
         .gte('created_at', fechaInicio)
@@ -116,7 +112,6 @@ async function recargarDatosYGraficos() {
         return;
     }
 
-    // Desencriptar montos y notas
     todasLasTransacciones = data.map(t => ({
         ...t,
         montoReal: parseFloat(desencriptar(t.monto)),
@@ -140,17 +135,8 @@ function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
         document.getElementById('titulo-historial').textContent = `Historial: ${nombreCuenta}`;
     }
     
-    // Obtener cuenta seleccionada para aplicar regla Yape vs Débito
-    const cuenta = todasLasCuentas.find(c => c.id === cuentaId);
-    let transaccionesFiltradas = [];
-
-    if (cuenta) {
-        if (cuenta.nombre === 'Yape') {
-            transaccionesFiltradas = todasLasTransacciones.filter(t => t.medio_pago_id === cuentaId);
-        } else {
-            transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_afectada_id === cuentaId);
-        }
-    }
+    // Filtrado de transacciones utilizando cuenta_id
+    const transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_id === cuentaId);
 
     lista.innerHTML = '';
     if (transaccionesFiltradas.length === 0) {
@@ -161,7 +147,7 @@ function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
             const esGasto = t.tipo === 'gasto';
             const colorMonto = esGasto ? 'text-red-500' : 'text-green-600';
             const signo = esGasto ? '-' : '+';
-            const notaHtml = t.notaReal !== "-" ? `<p class="text-sm text-gray-600 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">📝 ${t.notaReal}</p>` : `<p class="text-sm text-gray-400 mt-2 italic">Sin nota adicional.</p>`;
+            const notaHtml = (t.notaReal !== "-" && t.notaReal !== "Error") ? `<p class="text-sm text-gray-600 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">📝 ${t.notaReal}</p>` : `<p class="text-sm text-gray-400 mt-2 italic">Sin nota adicional.</p>`;
 
             const fila = document.createElement('div');
             fila.className = "border border-gray-200 rounded-xl overflow-hidden bg-white";
@@ -192,7 +178,6 @@ window.toggleAcordeon = function(elementoHeader) {
     const flecha = elementoHeader.querySelector('.flecha');
     const contenido = elementoHeader.nextElementSibling;
     
-    // Cerrar otros abiertos
     document.querySelectorAll('.historial-nota.abierto').forEach(el => {
         if (el !== contenido) {
             el.classList.remove('abierto');
@@ -213,10 +198,8 @@ document.getElementById('btn-cerrar-historial').addEventListener('click', () => 
 // MOTOR GRÁFICO (Chart.js)
 // ==========================================
 function actualizarGraficos() {
-    // Filtrar solo los gastos para el análisis
     const gastos = todasLasTransacciones.filter(t => t.tipo === 'gasto');
 
-    // 1. Preparar datos para Dona (Agrupados por Categoría)
     const sumaPorCategoria = {};
     gastos.forEach(g => {
         sumaPorCategoria[g.nombreConcepto] = (sumaPorCategoria[g.nombreConcepto] || 0) + g.montoReal;
@@ -225,14 +208,12 @@ function actualizarGraficos() {
     const labelsDona = Object.keys(sumaPorCategoria);
     const dataDona = Object.values(sumaPorCategoria);
 
-    // 2. Preparar datos para Línea (Agrupados por Día)
     const sumaPorDia = {};
     gastos.forEach(g => {
         const dia = new Date(g.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
         sumaPorDia[dia] = (sumaPorDia[dia] || 0) + g.montoReal;
     });
 
-    // Ordenar los días cronológicamente
     const labelsLinea = Object.keys(sumaPorDia).sort((a, b) => {
         const [d1, m1] = a.split('/');
         const [d2, m2] = b.split('/');
@@ -286,7 +267,7 @@ function renderizarGraficoLinea(labels, data) {
                 pointBackgroundColor: '#c0392b',
                 pointRadius: 4,
                 fill: true,
-                tension: 0.3 // Curvas suaves
+                tension: 0.3
             }]
         },
         options: {
@@ -312,5 +293,4 @@ function registrarServiceWorker() {
     }
 }
 
-// Arrancar la aplicación al cargar el script
 inicializarDashboard();
