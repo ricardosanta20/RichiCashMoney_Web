@@ -1,43 +1,95 @@
-<!-- V1.4 -->
+<!-- V8.0 -->
 <!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>RichiCashMoney - Dashboard</title>
+    <title>RichiCash PRO</title>
     
     <!-- Enlace al Manifest para la PWA -->
     <link rel="manifest" href="manifest.json">
     <!-- Color del tema para la barra del navegador en móviles -->
     <meta name="theme-color" content="#1abc9c">
     
+    <!-- Hoja de estilos original -->
     <link rel="stylesheet" href="styles.css">
     
-    <!-- Librerías externas -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Tailwind CSS para diseño moderno de banca móvil -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js para los gráficos dinámicos -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <!-- Cliente oficial de Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    <!-- Fernet para desencriptar montos y notas en el navegador -->
+    <script src="https://cdn.jsdelivr.net/npm/fernet@0.4.0/fernetBrowser.min.js"></script>
+    
+    <style>
+        /* Animaciones para el acordeón de historial */
+        .historial-nota { max-height: 0; overflow: hidden; transition: max-height 0.3s ease-out; }
+        .historial-nota.abierto { max-height: 200px; }
+        .flecha { transition: transform 0.3s; }
+        .flecha.rotada { transform: rotate(180deg); }
+    </style>
 </head>
-<body>
-    <div class="container">
-        <header>
-            <h1>RichiCash PRO</h1>
-            <div class="total-box">
-                <p>Saldo Total Disponible</p>
-                <h2 id="saldo-total">S/ 0.00</h2>
-            </div>
-        </header>
-        
-        <h3>Mis Cuentas</h3>
-        <div id="grid-cuentas" class="cards-grid">
-            <p>Cargando saldos...</p>
-        </div>
+<body class="bg-gray-50 font-sans text-gray-800 pb-10">
 
-        <h3 class="seccion-titulo">Gastos por Categoría</h3>
-        <div class="chart-container">
-            <canvas id="graficoGastos"></canvas>
-        </div>
+    <!-- Totalizador de Liquidez Real (Solo Débito, Efectivo y Alimentos) -->
+    <div class="bg-teal-500 text-white p-8 text-center shadow-lg rounded-b-3xl mb-6">
+        <h1 class="text-2xl font-bold tracking-wide">RichiCash PRO</h1>
+        <p class="text-xs mt-2 uppercase tracking-widest opacity-80">Saldo Total Disponible</p>
+        <h2 class="text-5xl font-extrabold mt-2 drop-shadow-md" id="liquidez-total">S/ 0.00</h2>
     </div>
 
+    <div class="max-w-4xl mx-auto px-4">
+        
+        <!-- Filtro de Mes -->
+        <div class="mb-6 flex justify-between items-center bg-white p-4 rounded-xl shadow-sm border border-gray-100">
+            <label for="filtro-mes" class="font-bold text-gray-600 text-sm uppercase">Mes de análisis:</label>
+            <input type="month" id="filtro-mes" class="border border-gray-300 rounded-lg p-2 text-gray-700 bg-gray-50 focus:outline-none focus:ring-2 focus:ring-teal-400">
+        </div>
+
+        <!-- Panel de Gráficos (Dona y Línea de Tiempo) -->
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-center font-bold text-gray-700 mb-4">Distribución de Gastos</h3>
+                <div class="relative h-48 w-full flex justify-center">
+                    <canvas id="grafico-dona"></canvas>
+                </div>
+            </div>
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-gray-100">
+                <h3 class="text-center font-bold text-gray-700 mb-4">Evolución de Consumo Diario</h3>
+                <div class="relative h-48 w-full">
+                    <canvas id="grafico-linea"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Cuadrícula de Tarjetas de Cuentas -->
+        <h3 class="font-bold text-lg text-gray-700 mb-4 px-2">Mis Cuentas</h3>
+        <div class="grid grid-cols-2 md:grid-cols-3 gap-4" id="contenedor-cuentas">
+            <!-- Las tarjetas se inyectarán aquí mediante app.js -->
+            <p class="text-gray-500 col-span-2 md:col-span-3 text-center py-4">Cargando cuentas...</p>
+        </div>
+
+        <!-- Contenedor del Historial (Acordeón tipo Banca Móvil) -->
+        <div id="seccion-historial" class="hidden mt-8 bg-white p-5 rounded-2xl shadow-lg border border-gray-200">
+            <div class="flex justify-between items-center mb-6 border-b pb-3">
+                <h3 class="font-bold text-xl text-gray-800" id="titulo-historial">Historial de Cuenta</h3>
+                <button id="btn-cerrar-historial" class="text-red-500 font-bold text-sm bg-red-50 px-3 py-1 rounded-full hover:bg-red-100 transition">Cerrar</button>
+            </div>
+            <div id="lista-transacciones" class="flex flex-col gap-3">
+                <!-- Filas de transacciones inyectadas por app.js -->
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Carga de la lógica de conexión, desencriptación y renderizado -->
     <script src="app.js"></script>
 </body>
 </html>
+
+#V8.0
+#git add .
+#git commit -m "Integración de PWA"
+#git push -u origin main
