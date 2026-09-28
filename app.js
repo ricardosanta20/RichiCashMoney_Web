@@ -1,121 +1,316 @@
 /*
 const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co'
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='
 */
 
-// V1.3
-const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co'
+// V8.1
+// ==========================================
+// CONFIGURACIÓN DE CREDENCIALES
+// ==========================================
+const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='; // La misma que usas en el bot de Python
 
-const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-let graficoActual = null; 
+// Inicializar Supabase y Fernet
+const supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+const secret = new fernet.Secret(FERNET_KEY);
 
-async function cargarDashboard() {
+// Variables globales de estado
+let todasLasCuentas = [];
+let todasLasTransacciones = [];
+let graficoDonaInstancia = null;
+let graficoLineaInstancia = null;
+let cuentaActivaId = null;
+
+// ==========================================
+// DESENCRIPTACIÓN
+// ==========================================
+function desencriptar(textoEncriptado) {
+    if (!textoEncriptado || textoEncriptado === "-") return "-";
     try {
-        // 1. Cargar y mostrar los saldos de las cuentas
-        const { data: cuentas, error: errorCuentas } = await clienteSupabase.from('cuentas').select('nombre, saldo');
-        if (errorCuentas) throw errorCuentas;
-
-        const grid = document.getElementById('grid-cuentas');
-        const elementoTotal = document.getElementById('saldo-total');
-        grid.innerHTML = ''; 
-        let sumaTotal = 0;
-
-        cuentas.forEach(cuenta => {
-            const saldoNum = parseFloat(cuenta.saldo);
-            sumaTotal += saldoNum;
-            
-            const card = document.createElement('div');
-            card.className = 'card';
-            const claseMonto = saldoNum < 0 ? 'card-monto negativo' : 'card-monto';
-
-            card.innerHTML = `
-                <div class="card-title">${cuenta.nombre}</div>
-                <div class="${claseMonto}">S/ ${saldoNum.toFixed(2)}</div>
-            `;
-            grid.appendChild(card);
-        });
-
-        elementoTotal.textContent = `S/ ${sumaTotal.toFixed(2)}`;
-
-        // 2. Cargar transacciones de tipo 'gasto' con el nombre de su categoría
-        const { data: transacciones, error: errorTrans } = await clienteSupabase
-            .from('transacciones')
-            .select('monto, conceptos(nombre)')
-            .eq('tipo', 'gasto');
-
-        if (errorTrans) throw errorTrans;
-
-        // 3. Procesar y agrupar la información para el gráfico
-        const gastosPorCategoria = {};
-        
-        transacciones.forEach(t => {
-            const categoria = t.conceptos ? t.conceptos.nombre : 'Otros';
-            const monto = parseFloat(t.monto);
-            
-            if (gastosPorCategoria[categoria]) {
-                gastosPorCategoria[categoria] += monto;
-            } else {
-                gastosPorCategoria[categoria] = monto;
-            }
-        });
-
-        renderizarGrafico(gastosPorCategoria);
-
+        const token = new fernet.Token({ secret: secret, token: textoEncriptado, ttl: 0 });
+        return token.decode();
     } catch (error) {
-        console.error('Error al conectar con Supabase:', error);
-        document.getElementById('grid-cuentas').innerHTML = '<p>Error al cargar los datos</p>';
+        console.error("Error al desencriptar:", error);
+        return "Error";
     }
 }
 
-function renderizarGrafico(datos) {
-    const ctx = document.getElementById('graficoGastos').getContext('2d');
+// ==========================================
+// INICIALIZACIÓN Y CARGA DE DATOS
+// ==========================================
+async function inicializarDashboard() {
+    configurarFiltroMes();
+    await cargarCuentas();
+    await recargarDatosYGraficos();
+    registrarServiceWorker();
+}
+
+function configurarFiltroMes() {
+    const inputMes = document.getElementById('filtro-mes');
+    const hoy = new Date();
+    // Formato YYYY-MM
+    const mesActual = `${hoy.getFullYear()}-${String(hoy.getMonth() + 1).padStart(2, '0')}`;
+    inputMes.value = mesActual;
+    inputMes.addEventListener('change', () => recargarDatosYGraficos());
+}
+
+async function cargarCuentas() {
+    const { data, error } = await supabase.from('cuentas').select('*').order('id', { ascending: true });
+    if (error) {
+        console.error("Error cargando cuentas:", error);
+        return;
+    }
+    todasLasCuentas = data;
+    renderizarCuentas();
+}
+
+function renderizarCuentas() {
+    const contenedor = document.getElementById('contenedor-cuentas');
+    contenedor.innerHTML = '';
+    let liquidezReal = 0;
+
+    todasLasCuentas.forEach(cuenta => {
+        const saldo = parseFloat(cuenta.saldo);
+        
+        // Sumar solo a la liquidez real si cumple la regla
+        if (['BCP Débito', 'Efectivo', 'Tarjeta de alimentos'].includes(cuenta.nombre)) {
+            liquidezReal += saldo;
+        }
+
+        // Crear la tarjeta interactiva
+        const card = document.createElement('div');
+        card.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-teal-300 transition text-center";
+        card.onclick = () => abrirHistorial(cuenta.id, cuenta.nombre);
+        
+        const colorSaldo = saldo < 0 ? 'text-red-500' : 'text-gray-800';
+        
+        card.innerHTML = `
+            <p class="text-xs text-gray-500 font-bold uppercase tracking-wider mb-1">${cuenta.nombre}</p>
+            <h3 class="text-xl font-extrabold ${colorSaldo}">S/ ${saldo.toFixed(2)}</h3>
+        `;
+        contenedor.appendChild(card);
+    });
+
+    document.getElementById('liquidez-total').textContent = `S/ ${liquidezReal.toFixed(2)}`;
+}
+
+async function recargarDatosYGraficos() {
+    const mesSeleccionado = document.getElementById('filtro-mes').value; // 'YYYY-MM'
     
-    if (graficoActual) {
-        graficoActual.destroy();
+    // Calcular primer y último día del mes
+    const [año, mes] = mesSeleccionado.split('-');
+    const fechaInicio = new Date(año, mes - 1, 1).toISOString();
+    const fechaFin = new Date(año, mes, 0, 23, 59, 59).toISOString();
+
+    const { data, error } = await supabase
+        .from('transacciones')
+        .select(`*, conceptos(nombre)`)
+        .gte('created_at', fechaInicio)
+        .lte('created_at', fechaFin)
+        .order('created_at', { ascending: false });
+
+    if (error) {
+        console.error("Error cargando transacciones:", error);
+        return;
     }
 
-    const etiquetas = Object.keys(datos);
-    const valores = Object.values(datos);
+    // Desencriptar montos y notas
+    todasLasTransacciones = data.map(t => ({
+        ...t,
+        montoReal: parseFloat(desencriptar(t.monto)),
+        notaReal: desencriptar(t.nota),
+        nombreConcepto: t.conceptos ? t.conceptos.nombre : 'Sin Categoría'
+    }));
 
-    // Si no hay datos, mostrar un gráfico vacío representativo
-    if (etiquetas.length === 0) {
-        etiquetas.push('Sin gastos');
-        valores.push(1);
+    actualizarGraficos();
+    if (cuentaActivaId) abrirHistorial(cuentaActivaId, null, false);
+}
+
+// ==========================================
+// LÓGICA DE HISTORIAL (ACORDEÓN BANCARIO)
+// ==========================================
+function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
+    cuentaActivaId = cuentaId;
+    const seccion = document.getElementById('seccion-historial');
+    const lista = document.getElementById('lista-transacciones');
+    
+    if (nombreCuenta) {
+        document.getElementById('titulo-historial').textContent = `Historial: ${nombreCuenta}`;
+    }
+    
+    // Obtener cuenta seleccionada para aplicar regla Yape vs Débito
+    const cuenta = todasLasCuentas.find(c => c.id === cuentaId);
+    let transaccionesFiltradas = [];
+
+    if (cuenta) {
+        if (cuenta.nombre === 'Yape') {
+            transaccionesFiltradas = todasLasTransacciones.filter(t => t.medio_pago_id === cuentaId);
+        } else {
+            transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_afectada_id === cuentaId);
+        }
     }
 
-    graficoActual = new Chart(ctx, {
+    lista.innerHTML = '';
+    if (transaccionesFiltradas.length === 0) {
+        lista.innerHTML = '<p class="text-gray-500 text-center py-4">No hay movimientos este mes.</p>';
+    } else {
+        transaccionesFiltradas.forEach(t => {
+            const fecha = new Date(t.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
+            const esGasto = t.tipo === 'gasto';
+            const colorMonto = esGasto ? 'text-red-500' : 'text-green-600';
+            const signo = esGasto ? '-' : '+';
+            const notaHtml = t.notaReal !== "-" ? `<p class="text-sm text-gray-600 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">📝 ${t.notaReal}</p>` : `<p class="text-sm text-gray-400 mt-2 italic">Sin nota adicional.</p>`;
+
+            const fila = document.createElement('div');
+            fila.className = "border border-gray-200 rounded-xl overflow-hidden bg-white";
+            fila.innerHTML = `
+                <div class="flex justify-between items-center p-4 cursor-pointer hover:bg-gray-50 transition" onclick="toggleAcordeon(this)">
+                    <div class="flex flex-col">
+                        <span class="font-bold text-gray-800">${t.nombreConcepto}</span>
+                        <span class="text-xs text-gray-400">${fecha}</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="font-extrabold ${colorMonto}">${signo}S/ ${t.montoReal.toFixed(2)}</span>
+                        <svg class="flecha w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                    </div>
+                </div>
+                <div class="historial-nota bg-white px-4">
+                    ${notaHtml}
+                </div>
+            `;
+            lista.appendChild(fila);
+        });
+    }
+
+    seccion.classList.remove('hidden');
+    if (scroll) seccion.scrollIntoView({ behavior: 'smooth' });
+}
+
+window.toggleAcordeon = function(elementoHeader) {
+    const flecha = elementoHeader.querySelector('.flecha');
+    const contenido = elementoHeader.nextElementSibling;
+    
+    // Cerrar otros abiertos
+    document.querySelectorAll('.historial-nota.abierto').forEach(el => {
+        if (el !== contenido) {
+            el.classList.remove('abierto');
+            el.previousElementSibling.querySelector('.flecha').classList.remove('rotada');
+        }
+    });
+
+    contenido.classList.toggle('abierto');
+    flecha.classList.toggle('rotada');
+}
+
+document.getElementById('btn-cerrar-historial').addEventListener('click', () => {
+    document.getElementById('seccion-historial').classList.add('hidden');
+    cuentaActivaId = null;
+});
+
+// ==========================================
+// MOTOR GRÁFICO (Chart.js)
+// ==========================================
+function actualizarGraficos() {
+    // Filtrar solo los gastos para el análisis
+    const gastos = todasLasTransacciones.filter(t => t.tipo === 'gasto');
+
+    // 1. Preparar datos para Dona (Agrupados por Categoría)
+    const sumaPorCategoria = {};
+    gastos.forEach(g => {
+        sumaPorCategoria[g.nombreConcepto] = (sumaPorCategoria[g.nombreConcepto] || 0) + g.montoReal;
+    });
+
+    const labelsDona = Object.keys(sumaPorCategoria);
+    const dataDona = Object.values(sumaPorCategoria);
+
+    // 2. Preparar datos para Línea (Agrupados por Día)
+    const sumaPorDia = {};
+    gastos.forEach(g => {
+        const dia = new Date(g.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit' });
+        sumaPorDia[dia] = (sumaPorDia[dia] || 0) + g.montoReal;
+    });
+
+    // Ordenar los días cronológicamente
+    const labelsLinea = Object.keys(sumaPorDia).sort((a, b) => {
+        const [d1, m1] = a.split('/');
+        const [d2, m2] = b.split('/');
+        return new Date(2020, m1 - 1, d1) - new Date(2020, m2 - 1, d2); 
+    });
+    const dataLinea = labelsLinea.map(dia => sumaPorDia[dia]);
+
+    renderizarGraficoDona(labelsDona, dataDona);
+    renderizarGraficoLinea(labelsLinea, dataLinea);
+}
+
+function renderizarGraficoDona(labels, data) {
+    const ctx = document.getElementById('grafico-dona').getContext('2d');
+    if (graficoDonaInstancia) graficoDonaInstancia.destroy();
+
+    graficoDonaInstancia = new Chart(ctx, {
         type: 'doughnut',
         data: {
-            labels: etiquetas,
+            labels: labels,
             datasets: [{
-                data: valores,
-                backgroundColor: [
-                    '#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF', '#FF9F40'
-                ],
-                borderWidth: 0,
-                hoverOffset: 4
+                data: data,
+                backgroundColor: ['#1abc9c', '#3498db', '#9b59b6', '#e74c3c', '#f1c40f', '#34495e'],
+                borderWidth: 0
             }]
         },
         options: {
             responsive: true,
+            maintainAspectRatio: false,
             plugins: {
-                legend: {
-                    position: 'bottom',
-                }
-            }
+                legend: { position: 'right', labels: { font: { size: 10 } } }
+            },
+            cutout: '70%'
         }
     });
 }
 
-cargarDashboard();
-// V1.4 (Fragmento para añadir al final de app.js)
+function renderizarGraficoLinea(labels, data) {
+    const ctx = document.getElementById('grafico-linea').getContext('2d');
+    if (graficoLineaInstancia) graficoLineaInstancia.destroy();
 
-// Registrar el Service Worker
-if ('serviceWorker' in navigator) {
-    window.addEventListener('load', () => {
-        navigator.serviceWorker.register('./sw.js')
-            .then(reg => console.log('Service Worker registrado con éxito.', reg.scope))
-            .catch(err => console.error('Error al registrar el Service Worker.', err));
+    graficoLineaInstancia = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Gasto Diario (S/)',
+                data: data,
+                borderColor: '#e74c3c',
+                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                borderWidth: 2,
+                pointBackgroundColor: '#c0392b',
+                pointRadius: 4,
+                fill: true,
+                tension: 0.3 // Curvas suaves
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: { beginAtZero: true, grid: { color: '#f3f4f6' } },
+                x: { grid: { display: false } }
+            },
+            plugins: { legend: { display: false } }
+        }
     });
 }
+
+// ==========================================
+// SERVICE WORKER (PWA)
+// ==========================================
+function registrarServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js').catch(err => console.error('Error Service Worker:', err));
+        });
+    }
+}
+
+// Arrancar la aplicación al cargar el script
+inicializarDashboard();
