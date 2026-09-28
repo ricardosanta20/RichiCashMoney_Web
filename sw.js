@@ -1,24 +1,20 @@
-// V9.0 - Service Worker para caché básico
-const CACHE_NAME = 'richicash-v1';
-const ASSETS = [
-    './',
-    './index.html',
-    './app.js',
-    './manifest.json'
-];
-
-self.addEventListener('install', event => {
-    event.waitUntil(
-        caches.open(CACHE_NAME).then(cache => {
-            return cache.addAll(ASSETS);
-        })
-    );
+// V9.1
+self.addEventListener('install', (e) => {
+    // Obliga al navegador a instalar la nueva versión inmediatamente
+    self.skipWaiting();
 });
 
-self.addEventListener('fetch', event => {
-    event.respondWith(
-        caches.match(event.request).then(response => {
-            return response || fetch(event.request);
+self.addEventListener('activate', (e) => {
+    // Destruye todos los cachés antiguos almacenados en el dispositivo
+    e.waitUntil(
+        caches.keys().then((keyList) => {
+            return Promise.all(keyList.map((key) => caches.delete(key)));
         })
     );
+    self.clients.claim();
+});
+
+self.addEventListener('fetch', (e) => {
+    // Obliga a buscar siempre en la red, sin guardar copias ocultas
+    e.respondWith(fetch(e.request));
 });
