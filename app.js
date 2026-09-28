@@ -1,18 +1,17 @@
 /*
-const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co'
+const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
-const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU=';
 */
 
-// V8.2
+// V9.0 - Corrección de esquema de BD y desactivación de caché agresiva
 // ==========================================
 // CONFIGURACIÓN DE CREDENCIALES
 // ==========================================
-const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co'
+const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
-const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='; 
 
-// Corrección: Cambio de nombre a 'clienteSupabase' para evitar colisiones en memoria
 const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const secret = new fernet.Secret(FERNET_KEY);
 
@@ -44,7 +43,7 @@ async function inicializarDashboard() {
     configurarFiltroMes();
     await cargarCuentas();
     await recargarDatosYGraficos();
-    registrarServiceWorker();
+    limpiarCacheYServiceWorker(); // Nueva función inyectada aquí
 }
 
 function configurarFiltroMes() {
@@ -135,8 +134,8 @@ function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
         document.getElementById('titulo-historial').textContent = `Historial: ${nombreCuenta}`;
     }
     
-    // Filtrado de transacciones utilizando cuenta_id
-    const transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_id === cuentaId);
+    // CORRECCIÓN ESTRUCTURAL: Se cambia cuenta_id por cuenta_afectada_id
+    const transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_afectada_id === cuentaId);
 
     lista.innerHTML = '';
     if (transaccionesFiltradas.length === 0) {
@@ -283,12 +282,19 @@ function renderizarGraficoLinea(labels, data) {
 }
 
 // ==========================================
-// SERVICE WORKER (PWA)
+// BLOQUEO DE CACHÉ PARA DESARROLLO
 // ==========================================
-function registrarServiceWorker() {
+function limpiarCacheYServiceWorker() {
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('./sw.js').catch(err => console.error('Error Service Worker:', err));
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+            }
+        });
+        
+        // Destruir memorias guardadas para forzar recarga en cada visita
+        caches.keys().then(keys => {
+            keys.forEach(key => caches.delete(key));
         });
     }
 }
