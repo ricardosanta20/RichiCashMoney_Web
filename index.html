@@ -82,6 +82,21 @@
             </div>
         </div>
 
+        <!-- SECCIÓN EXCLUSIVA: MONITOREO BCP AHORRO -->
+        <div class="mt-8 bg-white p-6 rounded-2xl shadow-sm border border-emerald-100">
+            <div class="flex items-center justify-between mb-4">
+                <div>
+                    <h2 class="text-lg font-bold text-gray-800">🔒 Evolución BCP Ahorro</h2>
+                    <p class="text-xs text-gray-400">Progreso del fondo y detección de retiros por imprevistos</p>
+                </div>
+                <span id="saldo-boveda-badge" class="px-3 py-1 bg-emerald-50 text-emerald-700 text-xs font-bold rounded-full border border-emerald-200">
+                    S/ 0.00
+                </span>
+            </div>
+            <div class="relative h-64 w-full">
+                <canvas id="grafico-ahorro"></canvas>
+            </div>
+        </div>
     </div>
 
     <!-- Carga de la lógica de conexión, desencriptación y renderizado -->

@@ -4,22 +4,22 @@ const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZ
 const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU=';
 */
 
-// V9.0 - Corrección de esquema de BD y desactivación de caché agresiva
+// V9.2 - Gráfico exclusivo y trazado de evolución para BCP Ahorro
 // ==========================================
 // CONFIGURACIÓN DE CREDENCIALES
 // ==========================================
 const SUPABASE_URL = 'https://iabxvgribcibjeesucjy.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImlhYnh2Z3JpYmNpYmplZXN1Y2p5Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODczNDIyODUsImV4cCI6MjEwMjkxODI4NX0.SwdVLygYWNYgAid_spff5aiD3gtpSxI0F5dbwON0xt8';
-const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU='; 
+const FERNET_KEY = 'U2clJXDbo1ORWQHz7gA6UJkx-xSvZ-UH2LYONd0TNsU=';
 
 const clienteSupabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 const secret = new fernet.Secret(FERNET_KEY);
 
-// Variables globales de estado
 let todasLasCuentas = [];
 let todasLasTransacciones = [];
 let graficoDonaInstancia = null;
 let graficoLineaInstancia = null;
+let graficoAhorroInstancia = null;
 let cuentaActivaId = null;
 
 // ==========================================
@@ -37,13 +37,13 @@ function desencriptar(textoEncriptado) {
 }
 
 // ==========================================
-// INICIALIZACIÓN Y CARGA DE DATOS
+// INICIALIZACIÓN
 // ==========================================
 async function inicializarDashboard() {
     configurarFiltroMes();
     await cargarCuentas();
     await recargarDatosYGraficos();
-    limpiarCacheYServiceWorker(); // Nueva función inyectada aquí
+    limpiarCacheYServiceWorker();
 }
 
 function configurarFiltroMes() {
@@ -76,6 +76,11 @@ function renderizarCuentas() {
             liquidezReal += saldo;
         }
 
+        if (cuenta.nombre === 'BCP Ahorro') {
+            const badgeAhorro = document.getElementById('saldo-boveda-badge');
+            if (badgeAhorro) badgeAhorro.textContent = `Bóveda: S/ ${saldo.toFixed(2)}`;
+        }
+
         const card = document.createElement('div');
         card.className = "bg-white p-4 rounded-xl shadow-sm border border-gray-100 cursor-pointer hover:shadow-md hover:border-teal-300 transition text-center";
         card.onclick = () => abrirHistorial(cuenta.id, cuenta.nombre);
@@ -94,7 +99,6 @@ function renderizarCuentas() {
 
 async function recargarDatosYGraficos() {
     const mesSeleccionado = document.getElementById('filtro-mes').value; 
-    
     const [año, mes] = mesSeleccionado.split('-');
     const fechaInicio = new Date(año, mes - 1, 1).toISOString();
     const fechaFin = new Date(año, mes, 0, 23, 59, 59).toISOString();
@@ -118,12 +122,13 @@ async function recargarDatosYGraficos() {
         nombreConcepto: t.conceptos ? t.conceptos.nombre : 'Sin Categoría'
     }));
 
-    actualizarGraficos();
+    actualizarGraficosGenerales();
+    await renderizarGraficoEvolucionAhorro();
     if (cuentaActivaId) abrirHistorial(cuentaActivaId, null, false);
 }
 
 // ==========================================
-// LÓGICA DE HISTORIAL (ACORDEÓN BANCARIO)
+// HISTORIAL POR CUENTA
 // ==========================================
 function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
     cuentaActivaId = cuentaId;
@@ -134,7 +139,6 @@ function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
         document.getElementById('titulo-historial').textContent = `Historial: ${nombreCuenta}`;
     }
     
-    // CORRECCIÓN ESTRUCTURAL: Se cambia cuenta_id por cuenta_afectada_id
     const transaccionesFiltradas = todasLasTransacciones.filter(t => t.cuenta_afectada_id === cuentaId);
 
     lista.innerHTML = '';
@@ -143,7 +147,7 @@ function abrirHistorial(cuentaId, nombreCuenta, scroll = true) {
     } else {
         transaccionesFiltradas.forEach(t => {
             const fecha = new Date(t.created_at).toLocaleString('es-PE', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' });
-            const esGasto = t.tipo === 'gasto';
+            const esGasto = t.tipo === 'gasto' || t.tipo === 'transferencia';
             const colorMonto = esGasto ? 'text-red-500' : 'text-green-600';
             const signo = esGasto ? '-' : '+';
             const notaHtml = (t.notaReal !== "-" && t.notaReal !== "Error") ? `<p class="text-sm text-gray-600 mt-2 p-3 bg-gray-50 rounded-lg border border-gray-100">📝 ${t.notaReal}</p>` : `<p class="text-sm text-gray-400 mt-2 italic">Sin nota adicional.</p>`;
@@ -186,7 +190,7 @@ window.toggleAcordeon = function(elementoHeader) {
 
     contenido.classList.toggle('abierto');
     flecha.classList.toggle('rotada');
-}
+};
 
 document.getElementById('btn-cerrar-historial').addEventListener('click', () => {
     document.getElementById('seccion-historial').classList.add('hidden');
@@ -194,9 +198,9 @@ document.getElementById('btn-cerrar-historial').addEventListener('click', () => 
 });
 
 // ==========================================
-// MOTOR GRÁFICO (Chart.js)
+// GRÁFICOS GENERALES (DONA Y GASTO DIARIO)
 // ==========================================
-function actualizarGraficos() {
+function actualizarGraficosGenerales() {
     const gastos = todasLasTransacciones.filter(t => t.tipo === 'gasto');
 
     const sumaPorCategoria = {};
@@ -216,7 +220,7 @@ function actualizarGraficos() {
     const labelsLinea = Object.keys(sumaPorDia).sort((a, b) => {
         const [d1, m1] = a.split('/');
         const [d2, m2] = b.split('/');
-        return new Date(2020, m1 - 1, d1) - new Date(2020, m2 - 1, d2); 
+        return new Date(2026, m1 - 1, d1) - new Date(2026, m2 - 1, d2); 
     });
     const dataLinea = labelsLinea.map(dia => sumaPorDia[dia]);
 
@@ -241,9 +245,7 @@ function renderizarGraficoDona(labels, data) {
         options: {
             responsive: true,
             maintainAspectRatio: false,
-            plugins: {
-                legend: { position: 'right', labels: { font: { size: 10 } } }
-            },
+            plugins: { legend: { position: 'right', labels: { font: { size: 10 } } } },
             cutout: '70%'
         }
     });
@@ -282,20 +284,107 @@ function renderizarGraficoLinea(labels, data) {
 }
 
 // ==========================================
-// BLOQUEO DE CACHÉ PARA DESARROLLO
+// GRÁFICO EXCLUSIVO: BCP AHORRO (EVOLUCIÓN)
+// ==========================================
+async function renderizarGraficoEvolucionAhorro() {
+    const canvas = document.getElementById('grafico-ahorro');
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+
+    const cuentaAhorro = todasLasCuentas.find(c => c.nombre === 'BCP Ahorro');
+    if (!cuentaAhorro) return;
+
+    // Obtener todas las transacciones históricas de la bóveda para construir la curva completa
+    const { data, error } = await clienteSupabase
+        .from('transacciones')
+        .select('*')
+        .or(`cuenta_afectada_id.eq.${cuentaAhorro.id},medio_pago_id.eq.${cuentaAhorro.id}`)
+        .order('created_at', { ascending: true });
+
+    if (error || !data) {
+        console.error("Error obteniendo transacciones de ahorro:", error);
+        return;
+    }
+
+    const movimientosAhorro = data.map(t => ({
+        ...t,
+        montoReal: parseFloat(desencriptar(t.monto)),
+        fecha: new Date(t.created_at).toLocaleDateString('es-PE', { day: '2-digit', month: 'short' })
+    }));
+
+    // Construcción del saldo acumulado cronológico
+    let saldoAcumulado = 0;
+    const labels = [];
+    const datosSaldo = [];
+    const coloresPuntos = [];
+
+    movimientosAhorro.forEach((m, idx) => {
+        const esRetiro = m.tipo === 'transferencia' || (m.tipo === 'gasto' && m.cuenta_afectada_id === cuentaAhorro.id);
+        
+        if (esRetiro) {
+            saldoAcumulado -= m.montoReal;
+            coloresPuntos.push('#ef4444'); // Punto rojo: caída / gasto imprevisto
+        } else {
+            saldoAcumulado += m.montoReal;
+            coloresPuntos.push('#10b981'); // Punto verde: crecimiento del fondo
+        }
+
+        labels.push(m.fecha);
+        datosSaldo.push(saldoAcumulado);
+    });
+
+    if (graficoAhorroInstancia) graficoAhorroInstancia.destroy();
+
+    graficoAhorroInstancia = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels.length ? labels : ['Inicio'],
+            datasets: [{
+                label: 'Fondo BCP Ahorro (S/)',
+                data: datosSaldo.length ? datosSaldo : [parseFloat(cuentaAhorro.saldo)],
+                borderColor: '#10b981',
+                backgroundColor: 'rgba(16, 185, 129, 0.08)',
+                borderWidth: 2.5,
+                pointBackgroundColor: coloresPuntos.length ? coloresPuntos : ['#10b981'],
+                pointRadius: 5,
+                pointHoverRadius: 7,
+                fill: true,
+                tension: 0.25
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    grid: { color: '#f3f4f6' },
+                    ticks: { callback: valor => `S/ ${valor}` }
+                },
+                x: { grid: { display: false } }
+            },
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return `Saldo Bóveda: S/ ${context.parsed.y.toFixed(2)}`;
+                        }
+                    }
+                },
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+// ==========================================
+// LIMPIEZA DE CACHÉ
 // ==========================================
 function limpiarCacheYServiceWorker() {
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-                registration.unregister();
-            }
+        navigator.serviceWorker.getRegistrations().then(registrations => {
+            for (let reg of registrations) reg.unregister();
         });
-        
-        // Destruir memorias guardadas para forzar recarga en cada visita
-        caches.keys().then(keys => {
-            keys.forEach(key => caches.delete(key));
-        });
+        caches.keys().then(keys => keys.forEach(key => caches.delete(key)));
     }
 }
 
